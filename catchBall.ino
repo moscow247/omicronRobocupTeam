@@ -1,30 +1,32 @@
 int MOTOR[4][2] = {{2, 5}, {4, 3}, {6, 9}, {8, 7}};
+int yaw, yawold, up, kp, kd, t, a = 0, sign;
+int grey_sens[16] = {517, 515, 517, 519, 519, 519, 517, 518, 585, 586, 585, 584, 586, 587, 586, 586};
+int sens[16];
 byte motorL, motorR;
 
 #include <Wire.h>
-
-// hello world
+#include "GyroControl.h"
 
 byte DirectA  = 9;
 byte RDirectA = 6;
 byte powerA   = 21;
 byte DirectB  = 8;
 byte RDirectB = 7;
-byte powerB =20;
+byte powerB   = 20;
 byte DirectC  = 35;
 byte RDirectC = 36;
-byte powerC=22;
-byte DirectD =  30;
-byte RDirectD  =31;
-byte powerD =23;
-byte Mpower = 150;
-
-
-/*
-  IRSeeker.ino - A library/class for the HiTechnic IRSeeker V2 infrared sensor.
-  Created by B. Blechschmidt, August 1, 2013.
-  Released into the public domain.
-*/
+byte powerC   = 22;
+byte DirectD  = 30;
+byte RDirectD = 31;
+byte powerD   = 23;
+byte Mpower   = 150;
+#define PinD1 39
+#define PinD2 38
+#define PinD3 37
+#define PinA1 A22
+#define PinA2 A21
+GyroControl gyro;
+elapsedMillis timer;
 
 
 void MotorA(int speed) {
@@ -102,22 +104,14 @@ void MControl(int speedA, int speedB, int speedC, int speedD) {
   MotorD(speedD);
 }
 
-//void Move_deg(int angle,int power){
-//    up = Yaw * kp + (Yaw - Yawold) * kd;
-//    if(up > 50){
-//      up = 50;
-//    }else if(up < -50){
-//      up = -50;
-//    }else if(up < 20 and up > -20){
-//      up = 0;
-//    }
-//    MotorA(cos(radians(-45 + angle)) * power + up);
-//    MotorB(cos(radians(-135 + angle)) * -power + up);
-//    MotorC(cos(radians(45 + angle)) * power - up);
-//    MotorD(cos(radians(135 + angle)) * -power - up);
-//    Serial.println(up);
-//    Yawold = Yaw;
-//    }
+void Move_deg(int angle,int power){
+    up = yaw * kp + (yaw - yawold) * kd;
+    MotorA(cos(radians(45 + angle)) * power + up);
+    MotorB(cos(radians(135 + angle)) * -power + up);
+    MotorC(cos(radians(-45 + angle)) * power - up);
+    MotorD(cos(radians(-135 + angle)) * -power - up);
+    yawold = yaw;
+}
 
 struct InfraredResult
 {
@@ -247,51 +241,12 @@ void motor(int Speed1, int Speed2, int Speed3, int Speed4)
   }
 }
 
-//void serialEvent() {
-//  Serial4.write(0XA5);
-//  Serial4.write(0X52);//send it for each read
-//  while (Serial4.available()) {
-//    Re_buf[counter] = (unsigned char)Serial4.read();
-//    if (counter == 0 && Re_buf[0] != 0xAA) return;
-//    counter++;
-//    if (counter == 8)
-//    {
-//      counter = 0;
-//      if (Re_buf[0] == 0xAA && Re_buf[7] == 0x55) // data package is correct
-//      {
-//        Yaw = (int16_t)(Re_buf[1] << 8 | Re_buf[2]) / 100.00;
-//        Pitch = (int16_t)(Re_buf[3] << 8 | Re_buf[4]) / 100.00;
-//        Roll = (int16_t)(Re_buf[5] << 8 | Re_buf[6]) / 100.00;
-//      }
-//    }
-//  }
-//}
-
-
 void setup()
 {
-//  Serial.begin(9600);
+  kp = 2;
+  kd = 10;
+
   InfraredSeeker::Initialize();
-//  pinMode(2, OUTPUT);
-//  pinMode(3, OUTPUT);
-//  pinMode(4, OUTPUT);
-//  pinMode(5, OUTPUT);
-//  pinMode(6, OUTPUT);
-//  pinMode(7, OUTPUT);
-//  pinMode(8, OUTPUT);
-//  pinMode(9, OUTPUT);
-//  //  kp = 1.7;
-//  //  kd = 10;
-//  pinMode(26, OUTPUT);
-//  digitalWrite(26, HIGH);
-//  Serial.begin(115200);
-//  Serial4.begin(115200);
-//  delay(2000);
-//  Serial4.write(0XA5);
-//  Serial4.write(0X54);
-//  delay(2000);
-//  Serial4.write(0XA5);
-//  Serial4.write(0X52);
   pinMode(21, OUTPUT);
   pinMode(6, OUTPUT);
   pinMode(9, OUTPUT);
@@ -307,23 +262,47 @@ void setup()
   pinMode(39, OUTPUT);
   pinMode(38, OUTPUT);
   pinMode(37, OUTPUT);
-  Serial.begin(9600);
   pinMode(13, OUTPUT);
   digitalWrite(13, HIGH);
-  //  t = millis();
+  Wire.setSDA(33);
+  Wire.setSCL(34);
+  Serial.begin(9600);
+  pinMode(39, OUTPUT);
+  pinMode(38, OUTPUT);
+  pinMode(37, OUTPUT);
+  gyro.start();
 }
 
 
 
 void loop()
 {
+  for (int i = 0; i < 8; i++){
+    digitalWrite(PinD1, i % 2);
+    digitalWrite(PinD2, (i % 4) / 2);
+    digitalWrite(PinD3, i / 4);
+  }
+  for (int i = 0; i < 8; i++){
+     sens[i] = analogRead(PinA1);
+     sens[i + 8] = analogRead(PinA2);
+  }
   InfraredResult InfraredBall = InfraredSeeker::ReadAC();
-  motorL = (5 - InfraredBall.Direction) * 20 + Mpower;
-  motorR = Mpower -(5 - InfraredBall.Direction ) * 17;
-  MControl(motorR, motorR, motorL, motorL);
-  Serial.println(String(InfraredBall.Direction) + "   -   "+String(motorL) +"      -       "+String(motorR));
-  delay(10);
-// digitalWrite(DirectA, HIGH);
-// digitalWrite(RDirectA, LOW);
-// analogWrite(powerA, 100);
+  gyro.read();
+  yaw = gyro.heading;
+  if (sens[0] > grey_sens[0] and sens[8] > grey_sens[8]){
+    if (InfraredBall.Direction == 0 or InfraredBall.Direction == 9){
+      Move_deg(-150, 200);
+    }
+    else{
+      Move_deg((InfraredBall.Direction - 5) * -35, 200);
+    }
+  }
+  else{
+    sign = ((InfraredBall.Direction - 5) * -35) / abs(((InfraredBall.Direction - 5) * -35));
+    Move_deg((-180 * sign) + ((InfraredBall.Direction - 5) * -35), 200);
+    t = timer;
+    while (t - timer < 150){
+      Move_deg((-180 * sign) + ((InfraredBall.Direction - 5) * -35), 200);
+    }
+  }
 }
