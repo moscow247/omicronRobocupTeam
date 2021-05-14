@@ -1,9 +1,11 @@
 int MOTOR[4][2] = {{2, 5}, {4, 3}, {6, 9}, {8, 7}};
-int yaw, yawold, up, kp, kd, t, a = 0, sign;
-int grey_sens[16] = {517, 515, 517, 519, 519, 519, 517, 518, 585, 586, 585, 584, 586, 587, 586, 586};
+int yaw, yawold, up, kp, kd, t, a = 0, sign, white, b;
+int grey_sens[16] = {513, 489, 559, 511, 517, 519, 446, 465, 519, 437, 466, 526, 581, 552, 548, 502};
+int num_sens[16] = {9, 11, 5, 8, 10, 12, 6, 7, 3, 2, 13, 0, 1, 4, 14, 15};
 int sens[16];
 byte motorL, motorR;
 
+#include <FastLED.h>
 #include <Wire.h>
 #include "GyroControl.h"
 
@@ -25,8 +27,11 @@ byte Mpower   = 150;
 #define PinD3 37
 #define PinA1 A22
 #define PinA2 A21
+#define NUM_LEDS 8
+#define DATA_PIN 16
 GyroControl gyro;
 elapsedMillis timer;
+CRGB leds[NUM_LEDS];
 
 
 void MotorA(int speed) {
@@ -223,24 +228,6 @@ InfraredResult InfraredSeeker::ReadDC()
   return PopulateValues(buffer);
 }
 
-void motor(int Speed1, int Speed2, int Speed3, int Speed4)
-{
-  int sp[4] = {Speed1, Speed2, Speed3, Speed4};
-  int SP;
-  for (int i = 0; i < 4; i++)
-  {
-    SP = (abs(sp[i]) > 255) ? 255 : abs(sp[i]);
-    if (sp[i] <= 0)
-    {
-      analogWrite(MOTOR[i][0], SP);
-      analogWrite(MOTOR[i][1], 0);
-    } else {
-      analogWrite(MOTOR[i][1], SP);
-      analogWrite(MOTOR[i][0], 0);
-    }
-  }
-}
-
 void setup()
 {
   kp = 2;
@@ -270,7 +257,9 @@ void setup()
   pinMode(39, OUTPUT);
   pinMode(38, OUTPUT);
   pinMode(37, OUTPUT);
+  FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);
   gyro.start();
+  delay(2000);
 }
 
 
@@ -281,28 +270,60 @@ void loop()
     digitalWrite(PinD1, i % 2);
     digitalWrite(PinD2, (i % 4) / 2);
     digitalWrite(PinD3, i / 4);
-  }
-  for (int i = 0; i < 8; i++){
-     sens[i] = analogRead(PinA1);
-     sens[i + 8] = analogRead(PinA2);
+    sens[num_sens[i]] = analogRead(PinA1);
+    sens[num_sens[i + 8]] = analogRead(PinA2);
   }
   InfraredResult InfraredBall = InfraredSeeker::ReadAC();
   gyro.read();
   yaw = gyro.heading;
-  if (sens[0] > grey_sens[0] and sens[8] > grey_sens[8]){
+  white = 0;
+  for (int i = 0; i < 16; i++){
+    if (sens[i] < grey_sens[i]){
+      white = 1;
+    }
+  }
+  if (white == 0){
     if (InfraredBall.Direction == 0 or InfraredBall.Direction == 9){
-      Move_deg(-150, 200);
+      Move_deg(150, 150);
+      leds[0] = CRGB::Black;
+    }
+    else if ((InfraredBall.Direction == 5 or InfraredBall.Direction == 6) and InfraredBall.Strength > 175){
+      Move_deg(15, 255);
+      leds[0] = CRGB::Red;
     }
     else{
-      Move_deg((InfraredBall.Direction - 5) * -35, 200);
+      leds[0] = CRGB::Black;
+      Move_deg((InfraredBall.Direction - 5) * 35, 150);
     }
   }
   else{
-    sign = ((InfraredBall.Direction - 5) * -35) / abs(((InfraredBall.Direction - 5) * -35));
-    Move_deg((-180 * sign) + ((InfraredBall.Direction - 5) * -35), 200);
-    t = timer;
-    while (t - timer < 150){
-      Move_deg((-180 * sign) + ((InfraredBall.Direction - 5) * -35), 200);
+    b = InfraredBall.Direction - 5;
+    sign = (b * 35) / abs((b * 35));
+    if (sign == 0){
+      sign = -1;
     }
-  }
+    t = timer;
+    if (InfraredBall.Direction == 0 or InfraredBall.Direction == 9 or (InfraredBall.Direction == 8 and InfraredBall.Strength < 100) or InfraredBall.Direction == 1){
+      while (t - timer < 500){
+        Move_deg(150, 150);
+      }
+      leds[0] = CRGB::Yellow;
+    }
+    else{
+      while (t - timer < 500){
+        Move_deg((-180 * sign) + (b * 35), 150);
+      }
+      leds[0] = CRGB::Yellow;
+    }
+  }/*
+  white = 0;
+  while (true){
+    t = timer;
+    while (timer < t + 10){
+      Move_deg(white, 150);
+    }
+    white += 1;
+  }*/
+  FastLED.show();
+  Serial.println(String(InfraredBall.Strength) + ' ' + String(InfraredBall.Direction) + ' ' + String(gyro.heading));
 }
