@@ -1,3 +1,4 @@
+  
   #include "Wire.h"
 
 //#define MY_SERIAL //
@@ -7,8 +8,8 @@ void setup()
   // put your setup code here, to run once:
   Serial.begin(9600);
   Serial.println("\nI2C Scanner");
-  Wire.setSDA(18); 
-  Wire.setSCL(19);
+  Wire.setSDA(34); 
+  Wire.setSCL(33);
   Wire.begin();
   }
 
